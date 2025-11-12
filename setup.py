@@ -1,59 +1,43 @@
-
-import setuptools 
-from numpy.distutils.core import setup, Extension
+import os
+import sys
+import platform
+import subprocess
 
 try:
-    ext = [Extension(name='fortran_ref',
-                     sources=['anaklasis/fortran_ref_functions.f90'],
-                     f2py_options=['--quiet'],
-                     extra_f90_compile_args=['-w'])]
+    import numpy
+    from numpy.distutils.core import setup, Extension
+    has_numpy_distutils = True
+except ImportError:
+    has_numpy_distutils = False
 
-    setup(
-    	name='anaklasis',
-    	version='1.6.0',
-    	author='Alexandros Koutsioumpas',
-    	author_email='a.koutsioumpas@fz-juelich.de',
-    	description='Neutron and X-ray reflectivity calculations',
-    	packages=setuptools.find_packages(),
-    	ext_modules=ext,
-        classifiers=[
-            "Programming Language :: Python :: 3",
-            "Operating System :: OS Independent",
-            'Environment :: Console',
-            'Intended Audience :: Science/Research',
-            'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
-           ],
-        python_requires='>=3.7',
-        zip_safe=False,
-        install_requires=['numpy>=1.22','scipy>=1.4','matplotlib','numdifftools>=0.9.39','sympy>=1.6.2','emcee>=3.0','tqdm','corner'],
-    	)
+def run_f2py_build():
+    cmd = [
+        sys.executable, "-m", "numpy.f2py",
+        "-m", "fortran_ref",
+        "-c", "anaklasis/fortran_ref_functions.f90",
+        "--opt=-O3", "--quiet"
+    ]
 
-    print(' ')
-    print('anaklasis was installed and the FORTRAN extensions for reflectivity calculations were successfully built!')
-except:
+    if platform.system() == "Windows":
+        print("+++ Configuring Windows build (MSYS2 compilers)...")
+        os.environ["CC"] = r"C:\msys64\ucrt64\bin\gcc.exe"
+        os.environ["FC"] = r"C:\msys64\ucrt64\bin\gfortran.exe"
+        pyhome = sys.prefix.replace("\\", "/")
+        os.environ["CFLAGS"]  = f"-I{pyhome}/include"
+        os.environ["LDFLAGS"] = f"-L{pyhome}/libs"
+        os.environ["PATH"] = r"C:\msys64\ucrt64\bin;" + os.environ["PATH"]
 
-    setup(
-        name='anaklasis',
-        version='1.6.0',
-        author='Alexandros Koutsioumpas',
-        author_email='a.koutsioumpas@fz-juelich.de',
-        description='Neutron and X-ray reflectivity calculations',
-        packages=setuptools.find_packages(),
-        classifiers=[
-            "Programming Language :: Python :: 3",
-            "Operating System :: OS Independent",
-            'Environment :: Console',
-            'Intended Audience :: Science/Research',
-            'License :: OSI Approved :: GNU General Public License v3 (GPLv3)',
-           ],
-        python_requires='>=3.7',
-        zip_safe=False,
-        install_requires=['numpy>=1.22','scipy>=1.4','matplotlib','numdifftools>=0.9.39','sympy>=1.6.2','emcee>=3.0','tqdm','corner'],
-        )
+    print("+++ Running:", " ".join(cmd))
+    subprocess.check_call(cmd)
+    print("\n+++ Fortran module built successfully\n")
 
-    print('*** Warning ***')
-    print(' ')
-    print('no FORTRAN compiler was detected and anaklasis was installed without building the FORTRAN extensions for reflectivity calculations..')
-    print(' Install the Numba package to accelerate the calculation engine, otherwise the package will still run but with a very slow pure Python calculation engine.')
-
-
+if has_numpy_distutils and sys.version_info < (3, 12):
+    print("+++ Using legacy numpy.distutils build...")
+    ext = Extension(
+        name="anaklasis.fortran_ref",
+        sources=["anaklasis/fortran_ref_functions.f90"],
+    )
+    setup(name="anaklasis", ext_modules=[ext])
+else:
+    print("+++ Using modern f2py/Meson build...")
+    run_f2py_build()
