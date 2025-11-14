@@ -88,24 +88,49 @@ from scipy.optimize import minimize
 import scipy
 import warnings
 from scipy import special
+
+# ------------------------------------------------------------------
+# Universal njit definition (must exist BEFORE any @njit decorator)
+# ------------------------------------------------------------------
 try:
-	from fortran_ref import f_realref,f_profilecalc,f_solventcalc
-	engine='fortran'
-	def njit(*args, **kwargs):
-	    def decorator(func):
-	        return func 
-	    return decorator
-except ImportError as e:
-	try:
-		from numba import njit
-		import numba
-		engine='numba'
-	except ImportError as e:
-		engine='python'
-		def njit(*args, **kwargs):
-		    def decorator(func):
-		        return func 
-		    return decorator
+    from numba import njit
+except ImportError:
+    def njit(*args, **kwargs):
+        def decorator(func):
+            return func
+        return decorator
+
+
+# ================================================================
+# NEW ENGINE DETECTION LOGIC
+# ================================================================
+HAS_FORTRAN = False
+HAS_NUMBA = False
+
+# Try Fortran first (Linux or MSYS2-enabled Windows)
+try:
+    from fortran_ref import f_realref, f_profilecalc, f_solventcalc
+    HAS_FORTRAN = True
+except Exception:
+    pass
+
+# Try Numba next (Windows default)
+try:
+    from numba import njit
+    HAS_NUMBA = True
+except Exception:
+    pass
+
+# Select engine priority:
+if HAS_FORTRAN:
+    engine = "fortran"
+elif HAS_NUMBA:
+    engine = "numba"
+else:
+    engine = "python"
+
+
+
 # if os.name == 'nt':
 # 	spath=np.__file__
 # 	extra_dll_dir = os.path.join(spath[:-17], 'fortran_ref\.libs')

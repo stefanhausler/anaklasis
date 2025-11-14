@@ -58,22 +58,51 @@ Note that if you prefer you may use [MacPorts](https://www.macports.org) or [Hom
 
 **Windows 10 (_Numba_)**
 
-- Install _python_ >= 3.7 from [python.org](https://www.python.org/downloads/) and do not forget to include _python_ in the systen path.
-- Install _NumPy_ and upgrade _setuptools_
-```bash
-py -m pip install --upgrade pip setuptools
 
-py -m pip install numpy
-```
-- Download the latest _anaklasis_ release, navigate to the proper folder and install thought the command prompt
+Anaklasis supports a lightweight installation mode on Windows that uses the Numba JIT backend. This mode requires no Fortran compiler and is the recommended installation path for Windows users. Due to compatibility constraints with NumPy, Numba, llvmlite, and distutils,  Windows installations MUST use Python 3.11.
+
+To ensure compatibility with Python 3.11 on Windows, the following versions must be used:
+
+- `setuptools < 60`
+- `numpy < 2.0`
+- `numba` + `llvmlite`
+
+
+#### I. Install the required downgraded core packages:
 
 ```bash
-py setup.py install
+pip install "setuptools<60"
+pip install "numpy<2"
 ```
-- Install _Numba_
+
+#### II. Install remaining runtime dependencies:
+
 ```bash
-py -m pip install numba
+pip install scipy matplotlib sympy numdifftools emcee tqdm corner numba llvmlite
 ```
+
+#### III. Navigate to the *anaklasis* directory and install:
+
+```bash
+python setup.py install
+```
+
+Since the environment variable `ANAKLASIS_USE_MSYS2` is not set,  
+Windows automatically installs Anaklasis in Numba mode and skips all Fortran build steps.
+
+
+#### IV. Verification (Windows)
+
+```bash
+python -c "from anaklasis import ref; print('Engine:', ref.engine)"
+```
+
+Expected:
+
+```bash
+Engine: numba
+```
+
 
 **Windows 10 (_Python_ 3.9 only with provided _wheel_ )**
 
@@ -100,7 +129,7 @@ In case you prefer *Anaconda* on *Windows* just make sure you have _setuptools_ 
 An additional option for Windows 10 users is to use the Windows Subsystem for Linux (WSL), install a Linux distribution (like Ubuntu) and follow the installation instructions presented above for Linux.
 
 
-**Windows 11 (Python ≥ 3.12, Recommended MSYS2 Installation)**
+**Windows 11 (Python ≥ 3.12, MSYS2 Installation)**
 
 Uses MSYS2 (MINGW64) as the unified Python + compiler toolchain.
 
@@ -165,18 +194,8 @@ These contain no C extensions and install cleanly.
 
 #### V. Clone Anaklasis
 
-Example Windows path:
-C:\Users\<YourName>\Documents\anaklasis
-
-MSYS2 path:
-```
-/c/Users/<YourName>/Documents/anaklasis
-```
-
-Clone:
 
 ```
-cd /c/Users/<YourName>/Documents
 git clone https://github.com/stefanhausler/anaklasis.git
 cd anaklasis
 ```
@@ -186,12 +205,13 @@ cd anaklasis
 #### VI. Install Anaklasis
 
 ```
+export ANAKLASIS_USE_MSYS2=1
 python setup.py install
 ```
 
 ---
 
-### VII. Verify Fortran backend
+#### VII. Verify Fortran backend
 
 ```
 python -c "from anaklasis import ref; print('Fortran OK:', getattr(ref, 'engine', None) == 'fortran' and hasattr(ref, 'f_realref'))"
