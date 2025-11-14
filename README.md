@@ -17,11 +17,17 @@ Note that calculations with _Numba_ are 30-40% slower than with the _FORTRAN_ ex
 **Linux**
 
 - Install _Python_ >= 3.7 and optionally _gfortran_ 
-- Install _NumPy_
-- then download the latest _anaklasis_ release, unzip the archive and install throught the terminal
+- then download the latest _anaklasis_ release, unzip the archive and install through the terminal
 
 ```bash
-python3 setup.py install --user
+python -m pip install numpy scipy matplotlib sympy numdifftools emcee tqdm corner meson ninja 
+python setup.py install --user 
+```
+
+Test if the installation with gfortran succeeded.
+
+```bash
+python -c "from anaklasis import ref; print('Fortran OK:', getattr(ref, 'engine', None) == 'fortran' and hasattr(ref, 'f_realref'))"
 ```
 
 - If _gfortran_ was not present, install _Numba_ package.
@@ -93,187 +99,109 @@ In case you prefer *Anaconda* on *Windows* just make sure you have _setuptools_ 
 
 An additional option for Windows 10 users is to use the Windows Subsystem for Linux (WSL), install a Linux distribution (like Ubuntu) and follow the installation instructions presented above for Linux.
 
-**Windows 11 (Python ≥ 3.12)**
 
-Anaklasis includes a Fortran calculation core (`fortran_ref_functions.f90`) which must be compiled before use. On Linux and macOS this happens automatically using NumPy’s build system, but on Windows the setup requires a few additional steps because Python ≥ 3.12 no longer supports the legacy `distutils` backend and Meson may mix incompatible compilers.
+**Windows 11 (Python ≥ 3.12, Recommended MSYS2 Installation)**
 
-This section provides a verified working procedure for Windows 10/11 with  Python (≥ 3.12) and Conda.
+Uses MSYS2 (MINGW64) as the unified Python + compiler toolchain.
 
----
+#### I. Install MSYS2
 
-#### 1️⃣ Prerequisites
+Download from https://www.msys2.org/
 
-Install the following software:
+Install to:
+C:\msys64
 
-| Component | Notes |
-|------------|-------|
-| **Anaconda / Miniconda** | to manage Python environments |
-| **MSYS2** | provides `gcc` and `gfortran` compilers |
+Then open **MSYS2 MinGW 64-bit** (not UCRT64) and update:
 
-
----
-
-#### 2️⃣ Create a clean Conda environment
-```powershell
-conda create -n anaklasis python=3.12
-conda activate anaklasis
 ```
-
-Then install Python build dependencies:
-```powershell
-pip install numpy meson ninja
-```
-
----
-
-#### 3️⃣ Install MSYS2 Fortran compilers
-
-Open the **MSYS2 UCRT64** terminal once and run:
-
-```bash
 pacman -Syu
-pacman -S --needed mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-gcc-fortran
-```
-
-Verify from PowerShell:
-```powershell
-& "C:\msys64\ucrt64\bin\gfortran.exe" --version
-```
-
-Expected output should include:
-```
-GNU Fortran (Rev8, Built by MSYS2 project)
+# restart MSYS2
+pacman -Su
 ```
 
 ---
 
-#### 4️⃣ Clone the repository
-```powershell
-cd C:\Users\<yourname>\<yourpath>
-git clone https://github.com/<repo-owner>/anaklasis.git
+#### II. Install required scientific packages (system-wide)
+
+```
+pacman -S --needed     mingw-w64-x86_64-python     mingw-w64-x86_64-python-pip     mingw-w64-x86_64-python-setuptools     mingw-w64-x86_64-python-wheel     mingw-w64-x86_64-python-numpy     mingw-w64-x86_64-python-scipy     mingw-w64-x86_64-python-matplotlib     mingw-w64-x86_64-python-sympy     mingw-w64-x86_64-gcc     mingw-w64-x86_64-gcc-fortran     git
+```
+
+These system packages avoid heavy pip builds and ensure compatibility with the compiler.
+
+---
+
+#### III. Create a virtual environment with system packages
+
+```
+python -m venv --system-site-packages ~/anaklasis
+source ~/anaklasis/bin/activate
+```
+
+Test:
+
+```
+echo $MSYSTEM
+which python
+python -c "import numpy, matplotlib; print(numpy.__version__, matplotlib.__version__)"
+```
+
+Expected:
+- MINGW64
+- /mingw64/bin/python
+- Working numpy + matplotlib imports
+
+---
+
+#### IV. Install light pure-Python packages inside the venv
+
+```
+pip install numdifftools emcee tqdm corner
+```
+
+These contain no C extensions and install cleanly.
+
+---
+
+#### V. Clone Anaklasis
+
+Example Windows path:
+C:\Users\<YourName>\Documents\anaklasis
+
+MSYS2 path:
+```
+/c/Users/<YourName>/Documents/anaklasis
+```
+
+Clone:
+
+```
+cd /c/Users/<YourName>/Documents
+git clone https://github.com/stefanhausler/anaklasis.git
 cd anaklasis
 ```
 
 ---
 
-#### 5️⃣ Configure the environment for the build
+#### VI. Install Anaklasis
 
-Each time you rebuild, set the following environment variables:
-
-```powershell
-$env:MSYS2_PATH = "C:\msys64\ucrt64\bin"
-$env:PATH = "$env:MSYS2_PATH;" + $env:PATH
-
-$env:CC = "$env:MSYS2_PATH\gcc.exe"
-$env:FC = "$env:MSYS2_PATH\gfortran.exe"
-
-$env:CFLAGS  = "-IC:/Users/<yourname>/anaconda3/envs/anaklasis/include"
-$env:LDFLAGS = "-LC:/Users/<yourname>/anaconda3/envs/anaklasis/libs"
+```
+python setup.py install
 ```
 
 ---
 
-#### 6️⃣ Build the Fortran extension
-```powershell
-Remove-Item -Recurse -Force build,dist,*.egg-info,anaklasis\*.pyd -ErrorAction SilentlyContinue
-python setup.py build_ext --inplace
+### VII. Verify Fortran backend
+
+```
+python -c "from anaklasis import ref; print('Fortran OK:', getattr(ref, 'engine', None) == 'fortran' and hasattr(ref, 'f_realref'))"
 ```
 
-If everything is configured correctly you will see messages from the Meson/f2py build and then:
-```
-Fortran module built successfully
-```
+Expected:
 
----
-
-#### 7️⃣ Verify installation
-```powershell
-python -c "import anaklasis; print('Fortran OK:', hasattr(anaklasis, 'fortran_ref'))"
-```
-
-Expected output:
 ```
 Fortran OK: True
 ```
-
-You can now use Anaklasis in notebooks or scripts normally.
-
----
-
-#### Why the standard build fails on Windows
-
-| Problem | Cause | Fix in this procedure |
-|----------|--------|-----------------------|
-| `Compiler cl cannot compile programs` | Meson mixes MSVC (`cl.exe`) and MinGW (`gfortran`) | Explicitly set `CC` and `FC` to MSYS2 compilers |
-| `Unable to get gcc pre-processor defines` | `gcc` not visible to PowerShell | Added `ucrt64\bin` to `PATH` |
-| `Python.h: No such file or directory` | MSYS2 Python lacks headers | Pointed `CFLAGS`/`LDFLAGS` to Conda’s include/libs |
-| `Fatal Python error: init_fs_encoding` | Conflicting `PYTHONHOME` from MSYS2 Python | Always use Conda’s Python executable |
-| `numpy.distutils` errors on Python 3.12 | `distutils` backend removed | Switched to NumPy `f2py` Meson backend |
-| Garbled emoji output (`ðŸ§©`) | Console not UTF-8 | Run `chcp 65001` before build |
-
----
-
-#### Notes
-
-- Linux and macOS builds remain unchanged;  
-  the build system automatically falls back to the legacy `numpy.distutils` route there.
-- On Windows, the included `setup.py` now automatically switches to the modern Meson backend for Python ≥ 3.12.
-- Rebuilding after editing Fortran code requires rerunning  
-  ```powershell
-  python setup.py build_ext --inplace
-  ```
-  Editing Python code only does _not_ require recompilation.
-
----
-
-#### Example build script (optional)
-
-For convenience, create a small PowerShell script (`build_win.ps1`) inside the Anaklasis folder:
-
-```powershell
-# Activate Conda env
-conda activate anaklasis
-Set-Location 'C:\Users\<yourname>\<yourpath>\anaklasis'
-
-# --- Environment configuration ---
-$env:MSYS2_PATH = 'C:\msys64\ucrt64\bin'
-$env:CONDA_PY = 'C:\Users\<yourname>\anaconda3\envs\anaklasis'
-
-# Ensure MSYS2 tools are visible first
-$env:PATH = "$env:MSYS2_PATH;$env:PATH"
-
-# Explicitly tell Meson/F2PY which compilers and Python to use
-$env:CC = "$env:MSYS2_PATH\gcc.exe"
-$env:FC = "$env:MSYS2_PATH\gfortran.exe"
-$env:CFLAGS = "-I$env:CONDA_PY\include"
-$env:LDFLAGS = "-L$env:CONDA_PY\libs"
-$env:PKG_CONFIG_PATH = "$env:CONDA_PY\lib\pkgconfig"
-
-# --- Clean previous builds ---
-Remove-Item -Recurse -Force build,dist,*.egg-info,anaklasis\*.pyd -ErrorAction SilentlyContinue
-
-Write-Host '+++ Using modern f2py/Meson build...'
-Write-Host '+++ Configuring Windows build (forcing Conda Python)...'
-
-# Force Meson to use Conda’s Python explicitly
-& "$env:CONDA_PY\python.exe" -m numpy.f2py -m fortran_ref -c anaklasis/fortran_ref_functions.f90 --opt=-O3 --quiet
-
-# --- Verify build (escaped properly for PowerShell) ---
-& "$env:CONDA_PY\python.exe" -c "import anaklasis; print('Fortran OK:', hasattr(anaklasis,'fortran_ref'))"
-
-```
-
-Then simply run:
-```powershell
-.\build_win.ps1
-```
-
----
-
-
-
-
-
 
 
 
