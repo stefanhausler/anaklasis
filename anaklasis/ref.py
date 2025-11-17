@@ -102,22 +102,29 @@ except ImportError:
 
 
 # ================================================================
-# NEW ENGINE DETECTION LOGIC
+# ENGINE DETECTION LOGIC (Fortran → Numba → Python)
 # ================================================================
 HAS_FORTRAN = False
 HAS_NUMBA = False
 
 # Try Fortran first (Linux or MSYS2-enabled Windows)
+# Use relative import so that 'anaklasis.fortran_ref' is found correctly
 try:
-    from fortran_ref import f_realref, f_profilecalc, f_solventcalc
+    from .fortran_ref import f_realref, f_profilecalc, f_solventcalc
     HAS_FORTRAN = True
 except Exception:
-    pass
+    # Fallback: also try absolute import if module is on sys.path as 'fortran_ref'
+    try:
+        from fortran_ref import f_realref, f_profilecalc, f_solventcalc
+        HAS_FORTRAN = True
+    except Exception:
+        pass
 
-# Try Numba next (Windows default)
+# Try Numba next (Windows default or any system with numba installed)
 try:
-    from numba import njit
+    from numba import njit as _numba_njit
     HAS_NUMBA = True
+    njit = _numba_njit  # override dummy njit if numba is actually present
 except Exception:
     pass
 
@@ -129,123 +136,143 @@ elif HAS_NUMBA:
 else:
     engine = "python"
 
-
-
 # if os.name == 'nt':
 # 	spath=np.__file__
 # 	extra_dll_dir = os.path.join(spath[:-17], 'fortran_ref\.libs')
 # 	if os.path.isdir(extra_dll_dir): 
 # 		os.add_dll_directory(extra_dll_dir)
 
-__all__ = ['fit', 'calculate','compare']
+__all__ = ['fit', 'calculate', 'compare']
 
-#engine='python' # can be 'fortran', 'numba', 'python'
+# ------------------------------------------------------------------
+# From here on, keep your existing implementation unchanged
+# ------------------------------------------------------------------
 
 @njit()
-def real_refl(mode,q,res,LayerMatrix, Nlayers):
-	#q neutron wavevector 1/Angstrom
-	#LayerMatrix, matrix containing the real (1st column) and imaginary (2nd column) scattering
-	# length density of each layer. The 3rd column corresponds to the thickness (A) of
-	# each layer and the 4th column to the roughness (A).
-	# row 1 and Nlayers+1 concern the fronting and backing material respectively
-	# Nlayers, Number of layers in the model
-	# res, instrumental resolution dq/q
-	#import numpy as np
+def real_refl(mode, q, res, LayerMatrix, Nlayers):
+    # q neutron wavevector 1/Angstrom
+    # LayerMatrix, matrix containing the real (1st column) and imaginary (2nd column) scattering
+    # length density of each layer. The 3rd column corresponds to the thickness (A) of
+    # each layer and the 4th column to the roughness (A).
+    # row 1 and Nlayers+1 concern the fronting and backing material respectively
+    # Nlayers, Number of layers in the model
+    # res, instrumental resolution dq/q
+    # import numpy as np
 
-	# Function for calculating theoretical neutron reflectivity
-	def refl(qq, LayerMatrix, Nlayers, l1):
-		#q neutron wavevector 1/Angstrom
-		#LayerMatrix, matrix containing the real (1st column) and imaginary (2nd column) scattering
-		# length density of each layer. The 3rd column corresponds to the thickness (A) of
-		# each layer and the 4th column to the roughness (A). 5th column solvent penetration
-		# row 1 and Nlayers+1 concern the fronting and backing material respectively
-		# Nlayers, Number of layers in the model
-		"""
-											       !  theory: kn=sqrt[kz^2-4pi(rhon-rho0)]
-											       !          r_{n,n+1}=[(k_{n}-k_{n+1})/(k_{n}+k_{n+1})] exp(-2k_{n}k_{n+1}sigma_{n,n+1}^2)
-											       !          b_{0}=0, b_{n}=ik_{n}d_{n}
-											       !
-											       !				 		  |        exp(-bn)           r_{n,n+1} exp(-bn) |
-											       !          C_{n} = |  r_{n,n+1} exp(-bn)            exp (-bn)     |
-											       !
-											       !          M=C0 C1 C2 ... Cn,        R=|M10/M00|^2
-		"""
-		#import numpy as np
+    # Function for calculating theoretical neutron reflectivity
+    def refl(qq, LayerMatrix, Nlayers, l1):
+        # q neutron wavevector 1/Angstrom
+        # LayerMatrix, matrix containing the real (1st column) and imaginary (2nd column) scattering
+        # length density of each layer. The 3rd column corresponds to the thickness (A) of
+        # each layer and the 4th column to the roughness (A). 5th column solvent penetration
+        # row 1 and Nlayers+1 concern the fronting and backing material respectively
+        # Nlayers, Number of layers in the model
+        """
+                                               !  theory: kn=sqrt[kz^2-4pi(rhon-rho0)]
+                                               !          r_{n,n+1}=[(k_{n}-k_{n+1})/(k_{n}+k_{n+1})] exp(-2k_{n}k_{n+1}sigma_{n,n+1}^2)
+                                               !          b_{0}=0, b_{n}=ik_{n}d_{n}
+                                               !
+                                               !				 		  |        exp(-bn)           r_{n,n+1} exp(-bn) |
+                                               !          C_{n} = |  r_{n,n+1} exp(-bn)            exp (-bn)     |
+                                               !
+                                               !          M=C0 C1 C2 . Cn,        R=|M10/M00|^2
+        """
+        m11 = 1.0 + 0.0j
+        m12 = 0.0 + 0.0j
+        m21 = 0.0 + 0.0j
+        m22 = 1.0 + 0.0j
 
-		m11=1.0+0.0j
-		m12=0.0+0.0j
-		m21=0.0+0.0j
-		m22=1.0+0.0j
+        kz = np.zeros(Nlayers + 2) * 1j
+        kz[:] = np.sqrt((qq ** 2) / 4.0 - 4.0 * np.pi * l1[:])
 
-		kz=np.zeros(Nlayers+2)*1j
-		kz[:]=np.sqrt((qq**2)/4.0-4.0*np.pi*l1[:])
+        for j in range(Nlayers + 1):
 
-		for j in range(Nlayers+1):
+            r = ((kz[j] - kz[j + 1]) / (kz[j] + kz[j + 1])) * np.exp(
+                -2.0 * kz[j] * kz[j + 1] * LayerMatrix[j, 3] ** 2
+            )
 
-			r=((kz[j]-kz[j+1])/(kz[j]+kz[j+1]))*np.exp(-2.0*kz[j]*kz[j+1]*LayerMatrix[j,3]**2)
+            d = LayerMatrix[j, 2]
 
-			d=LayerMatrix[j,2]
+            if j == 0:
+                b = 0.0
+            else:
+                b = kz[j] * d
 
-			if j==0:
-				b=0.0
-			else:
-				b=kz[j]*d
+            iixb = 1j * b
+            cdexpiixb = np.exp(iixb)
+            cdexpmiixb = 1.0 / cdexpiixb  # exp(-iixb)
 
-			iixb=1j*b
-			cdexpiixb=np.exp(iixb)
-			cdexpmiixb=1.0/cdexpiixb #exp(-iixb)
-		
-			k11=cdexpiixb
-			k12=r*cdexpiixb
-			k21=r*cdexpmiixb
-			k22=cdexpmiixb
+            k11 = cdexpiixb
+            k12 = r * cdexpiixb
+            k21 = r * cdexpmiixb
+            k22 = cdexpmiixb
 
-			h11=m11 
-			h12=m12 
-			h21=m21 
-			h22=m22
+            h11 = m11
+            h12 = m12
+            h21 = m21
+            h22 = m22
 
-			m11=h11*k11+h12*k21 
-			m12=h11*k12+h12*k22 
-			m21=h21*k11+h22*k21 
-			m22=h21*k12+h22*k22
+            m11 = h11 * k11 + h12 * k21
+            m12 = h11 * k12 + h12 * k22
+            m21 = h21 * k11 + h22 * k21
+            m22 = h21 * k12 + h22 * k22
 
-		ref=np.real((m21*np.conj(m21))/(m11*np.conj(m11)))
+        ref = np.real((m21 * np.conj(m21)) / (m11 * np.conj(m11)))
 
-		return ref
+        return ref
 
-	real_ref=0.0
-	deltaq=q*res/2.354820 # FWHM
+    real_ref = 0.0
+    deltaq = q * res / 2.354820  # FWHM
 
+    l1 = np.zeros(Nlayers + 2) * 1j
+    for j in range(Nlayers + 2):
+        if LayerMatrix[Nlayers + 1, 4] == 1.0 and LayerMatrix[0, 4] == 0.0:
+            l1[j] = (
+                (LayerMatrix[j, 0] * (1.0 - LayerMatrix[j, 4]) + LayerMatrix[Nlayers + 1, 0] * LayerMatrix[j, 4])
+                + 1j
+                * (
+                    LayerMatrix[j, 1] * (1.0 - LayerMatrix[j, 4])
+                    + LayerMatrix[Nlayers + 1, 1] * LayerMatrix[j, 4]
+                )
+                - LayerMatrix[0, 0]
+                + 1j * 1e-30
+            )
 
-	l1=np.zeros(Nlayers+2)*1j
-	for j in range(Nlayers+2):
-		if LayerMatrix[Nlayers+1,4] == 1.0 and LayerMatrix[0,4] == 0.0:
-			l1[j]=(LayerMatrix[j,0]*(1.0-LayerMatrix[j,4])+LayerMatrix[Nlayers+1,0]*LayerMatrix[j,4])+1j*(LayerMatrix[j,1]*(1.0-LayerMatrix[j,4])+LayerMatrix[Nlayers+1,1]*LayerMatrix[j,4])-LayerMatrix[0,0]+1j*1e-30
+        if LayerMatrix[Nlayers + 1, 4] == 0.0 and LayerMatrix[0, 4] == 1.0:
+            l1[j] = (
+                (LayerMatrix[j, 0] * (1.0 - LayerMatrix[j, 4]) + LayerMatrix[0, 0] * LayerMatrix[j, 4])
+                + 1j
+                * (
+                    LayerMatrix[j, 1] * (1.0 - LayerMatrix[j, 4])
+                    + LayerMatrix[0, 1] * LayerMatrix[j, 4]
+                )
+                - LayerMatrix[0, 0]
+                + 1j * 1e-30
+            )
 
-		if LayerMatrix[Nlayers+1,4] == 0.0 and LayerMatrix[0,4] == 1.0:
-			l1[j]=(LayerMatrix[j,0]*(1.0-LayerMatrix[j,4])+LayerMatrix[0,0]*LayerMatrix[j,4])+1j*(LayerMatrix[j,1]*(1.0-LayerMatrix[j,4])+LayerMatrix[0,1]*LayerMatrix[j,4])-LayerMatrix[0,0]+1j*1e-30
+        if LayerMatrix[Nlayers + 1, 4] == 0.0 and LayerMatrix[0, 4] == 0.0:
+            l1[j] = (
+                LayerMatrix[j, 0]
+                + 1j * LayerMatrix[j, 1]
+                - LayerMatrix[0, 0]
+                + 1j * 1e-30
+            )
 
-		if LayerMatrix[Nlayers+1,4] == 0.0 and LayerMatrix[0,4] == 0.0:
-			l1[j]=LayerMatrix[j,0]+1j*LayerMatrix[j,1]-LayerMatrix[0,0]+1j*1e-30
+    # Gaussian convolution
+    # from -3.5*sigma to 3.5*sigma, 17 point evaluation
+    if deltaq == 0.0:
+        qq = q
+        real_ref = refl(qq, LayerMatrix, Nlayers, l1)
+    else:  # integration with midpoint rule, 17 point evaluation
+        gfact = 1.0 / (deltaq * np.sqrt(2.0 * np.pi))
+        deltaq2 = 2.0 * (deltaq ** 2)
+        for i in range(-8, 9):
+            dx = 7.0 * deltaq / 17.0
+            qq = q + i * dx
+            gweight = gfact * np.exp(-((qq - q) ** 2) / (deltaq2)) * dx
+            real_ref = real_ref + gweight * refl(qq, LayerMatrix, Nlayers, l1)
 
-	# Gaussian convolution
-	# from -3.5*sigma to 3.5*sigma, 17 point evaluation
-	if deltaq == 0.0:
-		qq=q
-		real_ref=refl(qq, LayerMatrix, Nlayers, l1)
-	else: # integration with midpoint rule, 17 point evaluation
-		gfact=(1.0/(deltaq*np.sqrt(2.0*np.pi)))
-		deltaq2=2.0*(deltaq**2)
-		for i in range(-8,9):
-			dx=7.0*deltaq/17.0
-			qq=q+i*dx
-			gweight=gfact*np.exp(-((qq-q)**2)/(deltaq2))*dx
-			real_ref=real_ref+gweight*refl(qq, LayerMatrix, Nlayers, l1)
-
-	return real_ref
-
-
+    return real_ref
 
 
 

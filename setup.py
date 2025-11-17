@@ -9,6 +9,8 @@ try:
     from numpy.distutils.core import setup, Extension
     has_numpy_distutils = True
 except ImportError:
+    # Fallback: allow a pure-Python install even if numpy.distutils is not available
+    from setuptools import setup
     has_numpy_distutils = False
 
 is_windows = platform.system() == "Windows"
@@ -55,7 +57,7 @@ if is_windows and not use_msys2:
             "emcee>=3.0",
             "tqdm",
             "corner",
-            "numba"
+            "numba",
         ],
         zip_safe=False,
     )
@@ -70,7 +72,7 @@ if is_windows and not use_msys2:
 # ============================================================
 if is_windows and use_msys2:
     print("+++ MSYS2 Fortran build explicitly enabled by user.")
-    print("+++ Attempting Fortran build using numpy.distutils...")
+    print("+++ Attempting Fortran build using numpy.distutils.")
 
     ext = Extension(
         name="anaklasis.fortran_ref",
@@ -91,7 +93,7 @@ if is_windows and use_msys2:
             "sympy>=1.6.2",
             "emcee>=3.0",
             "tqdm",
-            "corner"
+            "corner",
         ],
     )
 
@@ -100,52 +102,64 @@ if is_windows and use_msys2:
 
 
 # ============================================================
-# LINUX / MACOS — full Fortran build (unchanged)
+# LINUX / MACOS — Fortran build with Python fallback
 # ============================================================
-print("+++ Linux/macOS detected — full Fortran build.")
+print("+++ Linux/macOS detected — attempting full Fortran build with Python fallback.")
 
-if has_numpy_distutils and sys.version_info < (3, 12):
-    print("+++ Using legacy numpy.distutils build...")
+install_requires_common = [
+    "numpy>=1.22",
+    "scipy>=1.4",
+    "matplotlib",
+    "numdifftools>=0.9.39",
+    "sympy>=1.6.2",
+    "emcee>=3.0",
+    "tqdm",
+    "corner",
+]
 
-    ext = Extension(
-        name="anaklasis.fortran_ref",
-        sources=["anaklasis/fortran_ref_functions.f90"],
-    )
+try:
+    if has_numpy_distutils and sys.version_info < (3, 12):
+        print("+++ Using legacy numpy.distutils build (Python < 3.12).")
+
+        ext = Extension(
+            name="anaklasis.fortran_ref",
+            sources=["anaklasis/fortran_ref_functions.f90"],
+        )
+
+        setup(
+            name="anaklasis",
+            version="1.6.0",
+            packages=["anaklasis"],
+            ext_modules=[ext],
+            install_requires=install_requires_common,
+        )
+
+        print("\n*** Fortran extension built successfully on Linux/macOS (numpy.distutils) ***\n")
+
+    else:
+        print("+++ Using modern f2py build (Python ≥ 3.12 or no numpy.distutils).")
+
+        # Build the module in-place via f2py, then install package as pure Python
+        run_f2py_build()
+
+        setup(
+            name="anaklasis",
+            version="1.6.0",
+            packages=["anaklasis"],
+            install_requires=install_requires_common,
+        )
+
+        print("\n*** Fortran extension built successfully on Linux/macOS via f2py ***\n")
+
+except Exception as e:
+    # Option B: if Fortran build fails, fall back to pure Python install.
+    print("\n*** Warning: Fortran build failed, installing anaklasis WITHOUT Fortran extension. ***")
+    print("Reason:", e)
+    print("*** The runtime will fall back to the pure Python/Numba engine. ***\n")
 
     setup(
         name="anaklasis",
         version="1.6.0",
         packages=["anaklasis"],
-        ext_modules=[ext],
-        install_requires=[
-            "numpy>=1.22",
-            "scipy>=1.4",
-            "matplotlib",
-            "numdifftools>=0.9.39",
-            "sympy>=1.6.2",
-            "emcee>=3.0",
-            "tqdm",
-            "corner"
-        ],
-    )
-
-else:
-    print("+++ Using modern f2py/Meson build (Python ≥3.12)")
-
-    run_f2py_build()
-
-    setup(
-        name="anaklasis",
-        version="1.6.0",
-        packages=["anaklasis"],
-        install_requires=[
-            "numpy>=1.22",
-            "scipy>=1.4",
-            "matplotlib",
-            "numdifftools>=0.9.39",
-            "sympy>=1.6.2",
-            "emcee>=3.0",
-            "tqdm",
-            "corner"
-        ],
+        install_requires=install_requires_common,
     )

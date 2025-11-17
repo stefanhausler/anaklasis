@@ -14,7 +14,7 @@ It is adviced to install a _FORTRAN_ compiler on your system before proceeding w
 
 Note that calculations with _Numba_ are 30-40% slower than with the _FORTRAN_ extensions, while _Python_ calculation engine without _Numba_ installed can be more than 20-30 times slower than the _FORTRAN_ extensions.
 
-**Linux**
+### Linux
 
 - Install _Python_ >= 3.7 and optionally _gfortran_ 
 - then download the latest _anaklasis_ release, unzip the archive and install through the terminal
@@ -32,7 +32,7 @@ python -c "from anaklasis import ref; print('Fortran OK:', getattr(ref, 'engine'
 
 - If _gfortran_ was not present, install _Numba_ package.
 
-**macOS**
+### macOS
 
 - Install _python_ >= 3.7 from [python.org](https://www.python.org/downloads/)
 - Optionally install _gfortran_ compiler. An easy way is to use the installers provided by _fxcoudert_ at [github](https://github.com/fxcoudert/gfortran-for-macOS)
@@ -56,10 +56,15 @@ python3 -m pip install numba
 
 Note that if you prefer you may use [MacPorts](https://www.macports.org) or [Homebrew](https://brew.sh) for the installation of _gfortran_ compiler.
 
-**Windows 10 (_Numba_)**
+### Windows 10 (_Numba_)
 
 
 Anaklasis supports a lightweight installation mode on Windows that uses the Numba JIT backend. This mode requires no Fortran compiler and is the recommended installation path for Windows users. Due to compatibility constraints with NumPy, Numba, llvmlite, and distutils,  Windows installations MUST use Python 3.11.
+
+```bash
+conda create -n anaklasis python=3.11
+conda activate anaklasis
+```
 
 To ensure compatibility with Python 3.11 on Windows, the following versions must be used:
 
@@ -71,6 +76,7 @@ To ensure compatibility with Python 3.11 on Windows, the following versions must
 #### I. Install the required downgraded core packages:
 
 ```bash
+pip install --upgrade pip
 pip install "setuptools<60"
 pip install "numpy<2"
 ```
@@ -94,7 +100,8 @@ Windows automatically installs Anaklasis in Numba mode and skips all Fortran bui
 #### IV. Verification (Windows)
 
 ```bash
-python -c "from anaklasis import ref; print('Engine:', ref.engine)"
+python -c "from anaklasis import ref; print('Engine:', ref.engine); print('Numba active:', 'Dispatcher' in str(type(ref.real_refl)))"
+
 ```
 
 Expected:
@@ -104,7 +111,7 @@ Engine: numba
 ```
 
 
-**Windows 10 (_Python_ 3.9 only with provided _wheel_ )**
+### Windows 10 (_Python_ 3.9 only with provided _wheel_ )
 
 For convenience a _wheel_ with a pre-compiled _fortran_ extension is provided (folder `\win_wheel`) for _Python_ version 3.9. For installing it follow the steps below:
 
@@ -124,12 +131,12 @@ py -m pip install anaklasis-1.6.0-cp39-cp39m-win_amd64.whl
 
 In case you prefer *Anaconda* on *Windows* just make sure you have _setuptools_ and _NumPy_ on the system and just install the wheel.
 
-**Windows 10 (using WSL)**
+### Windows 10 (using WSL)
 
 An additional option for Windows 10 users is to use the Windows Subsystem for Linux (WSL), install a Linux distribution (like Ubuntu) and follow the installation instructions presented above for Linux.
 
 
-**Windows 11 (Python ≥ 3.12, MSYS2 Installation)**
+### Windows 11 (Python ≥ 3.12, MSYS2 Installation)
 
 Uses MSYS2 (MINGW64) as the unified Python + compiler toolchain.
 
