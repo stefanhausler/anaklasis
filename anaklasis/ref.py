@@ -89,6 +89,18 @@ import scipy
 import warnings
 from scipy import special
 
+try:
+    import numba
+except:
+    pass
+
+if not hasattr(np, "float"):
+    np.float = float
+if not hasattr(np, "int"):
+    np.int = int
+if not hasattr(np, "bool"):
+    np.bool = bool
+
 # ------------------------------------------------------------------
 # Universal njit definition (must exist BEFORE any @njit decorator)
 # ------------------------------------------------------------------
@@ -3871,12 +3883,12 @@ def fit(project, in_file, units, fit_mode,fit_weight, method, resolution, patche
 			f.write('      R and R_exp the theoretical and experimental reflectivity respectively.\n')
 
 	print('\n')
-	print("Total calculation time (sec): ", np.int(elapsed_time))
+	print("Total calculation time (sec): ", int(elapsed_time))
 	print(' ')
 
 	if project != 'none':
 		f.write('\n')
-		f.write("Total calculation time (sec): "+str(np.int(elapsed_time)))
+		f.write("Total calculation time (sec): "+str(int(elapsed_time)))
 		f.write('\n')
 
 
